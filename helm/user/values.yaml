@@ -1,0 +1,6 @@
+deployment:
+  imageURL: gsurendhar/user
+  imageVersion: v2
+hpa:
+  maxReplicas: 5
+  utilization: 80

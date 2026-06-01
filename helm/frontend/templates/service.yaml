@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: roboshop
+  labels:
+    component: frontend
+    project: roboshop
+    tier: web    
+spec:
+  # load balancer type service is to expose our app to world with DNS 
+  type: LoadBalancer
+  # These are the labels is use attach pod to service, this should exactly match pod labels then only pods are attached to service
+  selector: 
+    component: frontend
+    project: roboshop
+    tier: web
+  ports:
+  - protocol: TCP
+    port: 80   # service port
+    targetPort: 8080    # container port

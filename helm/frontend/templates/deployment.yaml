@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: roboshop
+    # deployment labels
+  labels:
+    component: frontend
+    project: roboshop
+    tier: web
+spec:
+  replicas: 1
+  # These are the labels replica set use to create pod replicas, this should match pod labels then only replicas will created
+  selector:
+    matchLabels:
+      component: frontend
+      project: roboshop
+      tier: web
+  # This is pod definition
+  template:
+    metadata:
+      # Pod labels
+      labels:
+        component: frontend
+        project: roboshop
+        tier: web
+    spec: 
+      containers:
+      - name: frontend
+        image: "{{ .Values.deployment.imageURL }}:{{ .Values.deployment.imageVersion }}"
+        volumeMounts: 
+        - name: nginx-conf
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+          readOnly: true
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "128Mi"
+          limits:
+            cpu: "100m"
+            memory: "256Mi"
+      volumes: 
+        - name: nginx-conf
+          configMap:
+            name: nginx-conf
+            items:
+              - key: nginx.conf
+                path: nginx.conf

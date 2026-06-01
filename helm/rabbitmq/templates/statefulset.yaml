@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: 
+  name: rabbitmq
+  namespace: roboshop
+  labels:
+    component: rabbitmq
+    project: roboshop
+    tier: database
+spec:
+  selector:
+    matchLabels:   # has to match .spec.template.metadata.labels
+      component: rabbitmq
+      project: roboshop
+      tier: database
+  serviceName: "rabbitmq-headless"  # this should be headless service
+  replicas: {{ .Values.statefulset.replicas }}
+  template:
+    metadata:
+      labels:
+        component: rabbitmq
+        project: roboshop
+        tier: database
+    spec:
+      containers:
+      - name: rabbitmq
+        image: "{{ .Values.statefulset.imageURL }}:{{ .Values.statefulset.imageVersion }}"
+        volumeMounts: 
+        - name: rabbitmq-data
+          mountPath: /var/lib/rabbitmq
+        envFrom:
+        - secretRef:
+            name: rabbitmq
+  volumeClaimTemplates:
+  - metadata:
+      name: rabbitmq-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: "roboshop-ebs"
+      resources:
+        requests:
+          storage: 2Gi

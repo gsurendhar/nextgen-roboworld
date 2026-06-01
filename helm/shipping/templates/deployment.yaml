@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shipping
+  namespace: roboshop
+    # deployment labels
+  labels:
+    component: shipping
+    project: roboshop
+    tier: backend
+spec:
+  replicas: 1
+  # These are the labels replica set use to create pod replicas, this should match pod labels then only replicas will created
+  selector:
+    matchLabels:
+      component: shipping
+      project: roboshop
+      tier: backend
+  # This is pod definition
+  template:
+    metadata:
+      # Pod labels
+      labels:
+        component: shipping
+        project: roboshop
+        tier: backend
+    spec: 
+      containers:
+      - name: shipping
+        image: "{{ .Values.deployment.imageURL }}:{{ .Values.deployment.imageVersion }}"
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "200m"
+            memory: "512Mi"
+        envFrom:
+        - configMapRef:
+            name: shipping

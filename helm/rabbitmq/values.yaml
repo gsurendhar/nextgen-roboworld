@@ -1,0 +1,4 @@
+statefulset:
+  imageURL: gsurendhar/rabbitmq
+  imageVersion: v1
+  replicas: 2

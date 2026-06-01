@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment
+  namespace: roboshop
+  labels:
+    component: payment
+    project: roboshop
+    tier: backend    
+spec:
+  # These are the labels is use attach pod to service, this should exactly match pod labels then only pods are attached to service
+  selector: 
+    component: payment
+    project: roboshop
+    tier: backend
+  ports:
+  - protocol: TCP
+    port: 8080   # service port
+    targetPort: 8080    # container port

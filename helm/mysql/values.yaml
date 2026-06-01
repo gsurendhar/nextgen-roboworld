@@ -1,0 +1,4 @@
+statefulset:
+  imageURL: gsurendhar/mysql
+  imageVersion: v1
+  replicas: 2
