@@ -1,5 +1,5 @@
 
-# 🚀 NextGen RoboWorld Infrastructure (Terraform)
+#  NextGen RoboWorld Infrastructure (Terraform)
 
 ## Overview
 
@@ -709,4 +709,3 @@ Bastion ─► EKS
 SSM Parameter Store ─► All Terraform Modules
 ```
 
-This version is suitable for publishing directly as the repository's main `README.md` and is detailed enough for a junior DevOps engineer to provision the infrastructure from scratch.
