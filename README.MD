@@ -638,7 +638,7 @@ Terraform modules must be deployed in the following order:
 
 
 
-# Part 2 — Terraform Infrastructure Deployment Guide
+# 2. Terraform Infrastructure Deployment Guide
 
 ---
 
@@ -1564,3 +1564,1084 @@ At this stage you have:
 ✅ Amazon EKS
 
 
+
+
+## Jenkins Installation, Configuration, Shared Library Setup & CI/CD Pipelines
+
+# 3.Jenkins Setup & CI/CD Configuration
+
+---
+
+# Overview
+
+After Terraform infrastructure deployment, the next step is configuring Jenkins.
+
+Jenkins is responsible for:
+
+* Building application code
+* Creating Docker images
+* Pushing images to Amazon ECR
+* Deploying Helm charts
+* Updating applications running on Amazon EKS
+
+The RoboWorld platform uses:
+
+```text
+GitHub
+   │
+   ▼
+Jenkins
+   │
+   ▼
+Shared Library
+   │
+   ▼
+Docker Build
+   │
+   ▼
+Amazon ECR
+   │
+   ▼
+Helm Deployment
+   │
+   ▼
+Amazon EKS
+```
+
+---
+
+# CI/CD Architecture
+
+```text
+Developer
+    │
+    ▼
+
+GitHub Commit
+    │
+    ▼
+
+Webhook Trigger
+    │
+    ▼
+
+Jenkins Pipeline
+    │
+    ▼
+
+Build Application
+    │
+    ▼
+
+Docker Build
+    │
+    ▼
+
+Push Image to ECR
+    │
+    ▼
+
+Update Helm Release
+    │
+    ▼
+
+Deploy to EKS
+    │
+    ▼
+
+Application Running
+```
+
+---
+
+# Jenkins Server Architecture
+
+```text
+Jenkins Server
+│
+├── Shared Library
+│
+├── Frontend Pipeline
+│
+├── Catalogue Pipeline
+│
+├── User Pipeline
+│
+├── Cart Pipeline
+│
+├── Payment Pipeline
+│
+└── Shipping Pipeline
+```
+
+---
+
+# Step 1 — Install Jenkins
+
+Jenkins can be installed on:
+
+* EC2 Instance
+* Bastion Host
+* Dedicated VM
+
+Recommended:
+
+```text
+Amazon Linux 2023
+
+or
+
+RHEL 9
+```
+
+---
+
+# Install Java
+
+Verify:
+
+```bash
+java -version
+```
+
+Required:
+
+```text
+Java 17
+```
+
+---
+
+# Install Jenkins
+
+```bash
+sudo wget -O /etc/yum.repos.d/jenkins.repo \
+https://pkg.jenkins.io/redhat-stable/jenkins.repo
+
+sudo rpm --import \
+https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
+
+sudo yum install jenkins -y
+```
+
+---
+
+# Start Jenkins
+
+```bash
+sudo systemctl enable jenkins
+
+sudo systemctl start jenkins
+```
+
+Verify:
+
+```bash
+sudo systemctl status jenkins
+```
+
+Expected:
+
+```text
+active (running)
+```
+
+---
+
+# Open Jenkins Port
+
+```bash
+sudo firewall-cmd \
+--permanent \
+--add-port=8080/tcp
+
+sudo firewall-cmd --reload
+```
+
+---
+
+# Access Jenkins
+
+Open:
+
+```text
+http://<jenkins-server-ip>:8080
+```
+
+---
+
+# Retrieve Initial Password
+
+```bash
+sudo cat \
+/var/lib/jenkins/secrets/initialAdminPassword
+```
+
+Copy the password.
+
+---
+
+# Complete Jenkins Setup Wizard
+
+Install:
+
+```text
+Suggested Plugins
+```
+
+Create:
+
+```text
+Admin User
+```
+
+---
+
+# Step 2 — Install Required Plugins
+
+Navigate:
+
+```text
+Manage Jenkins
+
+↓
+
+Plugins
+```
+
+Install:
+
+```text
+Git
+
+Pipeline
+
+Pipeline Stage View
+
+Docker Pipeline
+
+Credentials Binding
+
+AWS Steps
+
+Kubernetes
+
+Blue Ocean
+
+SSH Agent
+
+Generic Webhook Trigger
+
+SonarQube Scanner
+
+Configuration as Code
+```
+
+Restart Jenkins.
+
+---
+
+# Step 3 — Install Docker on Jenkins Server
+
+Verify:
+
+```bash
+docker --version
+```
+
+If missing:
+
+```bash
+sudo yum install docker -y
+```
+
+Start:
+
+```bash
+sudo systemctl enable docker
+
+sudo systemctl start docker
+```
+
+---
+
+# Add Jenkins User to Docker Group
+
+```bash
+sudo usermod -aG docker jenkins
+```
+
+Restart:
+
+```bash
+sudo systemctl restart jenkins
+```
+
+Verify:
+
+```bash
+sudo su - jenkins
+
+docker ps
+```
+
+No permission errors should occur.
+
+---
+
+# Step 4 — Install AWS CLI
+
+Verify:
+
+```bash
+aws --version
+```
+
+---
+
+# Configure AWS Access
+
+```bash
+aws configure
+```
+
+Provide:
+
+```text
+Access Key
+
+Secret Key
+
+Region
+```
+
+Verify:
+
+```bash
+aws sts get-caller-identity
+```
+
+---
+
+# Step 5 — Install kubectl
+
+Verify:
+
+```bash
+kubectl version --client
+```
+
+---
+
+# Configure EKS Access
+
+```bash
+aws eks update-kubeconfig \
+--region ap-south-1 \
+--name roboshop-dev
+```
+
+Verify:
+
+```bash
+kubectl get nodes
+```
+
+Expected:
+
+```text
+2 Ready Nodes
+```
+
+---
+
+# Step 6 — Install Helm
+
+Verify:
+
+```bash
+helm version
+```
+
+---
+
+# Step 7 — Configure Jenkins Credentials
+
+Navigate:
+
+```text
+Manage Jenkins
+
+↓
+
+Credentials
+
+↓
+
+Global
+```
+
+---
+
+# AWS Credentials
+
+Create:
+
+```text
+ID:
+aws-creds
+```
+
+Contains:
+
+```text
+AWS Access Key
+
+AWS Secret Key
+```
+
+---
+
+# GitHub Credentials
+
+Create:
+
+```text
+ID:
+github-token
+```
+
+Contains:
+
+```text
+GitHub Personal Access Token
+```
+
+---
+
+# Docker Credentials
+
+Create:
+
+```text
+ID:
+ecr-creds
+```
+
+Used for:
+
+```text
+Amazon ECR Authentication
+```
+
+---
+
+# Sonar Credentials (Optional)
+
+```text
+ID:
+sonar-token
+```
+
+---
+
+# Step 8 — Configure GitHub Webhooks
+
+Repository:
+
+```text
+services
+```
+
+Navigate:
+
+```text
+GitHub
+
+↓
+
+Settings
+
+↓
+
+Webhooks
+```
+
+Add:
+
+```text
+http://jenkins-server:8080/github-webhook/
+```
+
+Events:
+
+```text
+Push
+```
+
+---
+
+# Shared Library Architecture
+
+The project uses a Jenkins Shared Library.
+
+Purpose:
+
+```text
+Centralized Pipeline Logic
+```
+
+Instead of:
+
+```text
+100 Lines Per Jenkinsfile
+```
+
+Every microservice contains:
+
+```groovy
+@Library('jenkins-shared-library') _
+```
+
+and calls a reusable function.
+
+---
+
+# Configure Shared Library
+
+Navigate:
+
+```text
+Manage Jenkins
+
+↓
+
+System
+
+↓
+
+Global Pipeline Libraries
+```
+
+Add:
+
+```text
+Name:
+jenkins-shared-library
+```
+
+Repository:
+
+```text
+https://github.com/<org>/jenkins-shared-library.git
+```
+
+Default Branch:
+
+```text
+main
+```
+
+Save.
+
+---
+
+# Shared Library Structure
+
+```text
+jenkins-shared-library
+
+├── vars
+│
+├── src
+│
+├── nodejsEKSPipeline.groovy
+│
+├── pythonEKSPipeline.groovy
+│
+└── javaEKSPipeline.groovy
+```
+
+---
+
+# Service Pipeline Mapping
+
+| Service   | Pipeline          |
+| --------- | ----------------- |
+| frontend  | nodejsEKSPipeline |
+| catalogue | nodejsEKSPipeline |
+| user      | nodejsEKSPipeline |
+| cart      | nodejsEKSPipeline |
+| payment   | pythonEKSPipeline |
+| shipping  | javaEKSPipeline   |
+
+---
+
+# NodeJS Pipeline
+
+Used By:
+
+```text
+catalogue
+
+user
+
+cart
+
+frontend
+```
+
+Jenkinsfile:
+
+```groovy
+@Library('jenkins-shared-library') _
+
+nodejsEKSPipeline()
+```
+
+---
+
+## Pipeline Stages
+
+```text
+Checkout Source
+
+↓
+
+Read package.json
+
+↓
+
+Install Dependencies
+
+↓
+
+Unit Tests
+
+↓
+
+Docker Build
+
+↓
+
+Push to ECR
+
+↓
+
+Helm Deployment
+
+↓
+
+Deploy to EKS
+```
+
+---
+
+# Stage 1 — Checkout
+
+```text
+GitHub
+    │
+    ▼
+Jenkins Workspace
+```
+
+Purpose:
+
+Download source code.
+
+---
+
+# Stage 2 — Read Version
+
+Reads:
+
+```text
+package.json
+```
+
+Extracts:
+
+```text
+Application Version
+```
+
+---
+
+# Stage 3 — Install Dependencies
+
+```bash
+npm install
+```
+
+Purpose:
+
+Create:
+
+```text
+node_modules
+```
+
+---
+
+# Stage 4 — Testing
+
+Typical commands:
+
+```bash
+npm test
+```
+
+Purpose:
+
+Validate application.
+
+---
+
+# Stage 5 — Docker Build
+
+Reads:
+
+```text
+Dockerfile
+```
+
+Creates:
+
+```text
+catalogue:v1
+
+user:v1
+
+cart:v1
+
+frontend:v1
+```
+
+---
+
+# Stage 6 — Push To ECR
+
+Logs into:
+
+```text
+Amazon ECR
+```
+
+Pushes image:
+
+```text
+catalogue:v1
+```
+
+---
+
+# Stage 7 — Helm Deployment
+
+Updates:
+
+```text
+imageVersion
+```
+
+inside Helm chart.
+
+---
+
+# Stage 8 — EKS Deployment
+
+Executes:
+
+```text
+helm upgrade
+```
+
+Result:
+
+```text
+Rolling Deployment
+```
+
+New pods are created automatically.
+
+---
+
+# Python Pipeline
+
+Used By:
+
+```text
+payment
+```
+
+Jenkinsfile:
+
+```groovy
+@Library('jenkins-shared-library') _
+
+pythonEKSPipeline()
+```
+
+---
+
+## Pipeline Flow
+
+```text
+Checkout
+
+↓
+
+Install Requirements
+
+↓
+
+Testing
+
+↓
+
+Docker Build
+
+↓
+
+Push ECR
+
+↓
+
+Helm Deploy
+
+↓
+
+EKS Update
+```
+
+---
+
+# Java Pipeline
+
+Used By:
+
+```text
+shipping
+```
+
+Jenkinsfile:
+
+```groovy
+@Library('jenkins-shared-library') _
+
+javaEKSPipeline()
+```
+
+---
+
+## Pipeline Flow
+
+```text
+Checkout
+
+↓
+
+Read pom.xml
+
+↓
+
+Maven Build
+
+↓
+
+Unit Tests
+
+↓
+
+Package JAR
+
+↓
+
+Docker Build
+
+↓
+
+Push ECR
+
+↓
+
+Helm Deploy
+
+↓
+
+EKS Deployment
+```
+
+---
+
+# Frontend Deployment
+
+Frontend also follows:
+
+```text
+NodeJS Pipeline Pattern
+```
+
+Stages:
+
+```text
+Checkout
+
+↓
+
+Docker Build
+
+↓
+
+Push ECR
+
+↓
+
+Helm Deploy
+```
+
+---
+
+# ECR Workflow
+
+```text
+Docker Build
+
+      │
+
+      ▼
+
+Docker Image
+
+      │
+
+      ▼
+
+Amazon ECR
+
+      │
+
+      ▼
+
+Helm Deployment
+
+      │
+
+      ▼
+
+Amazon EKS
+```
+
+---
+
+# Create Jenkins Pipelines
+
+Create:
+
+```text
+frontend
+
+catalogue
+
+user
+
+cart
+
+payment
+
+shipping
+```
+
+Pipeline Type:
+
+```text
+Pipeline Script from SCM
+```
+
+Repository:
+
+```text
+services repository
+```
+
+Branch:
+
+```text
+main
+```
+
+Jenkinsfile:
+
+```text
+Jenkinsfile
+```
+
+---
+
+# Verify Jenkins Setup
+
+Run:
+
+```text
+frontend pipeline
+```
+
+Verify:
+
+```text
+SUCCESS
+```
+
+Then:
+
+```text
+catalogue
+
+user
+
+cart
+
+payment
+
+shipping
+```
+
+---
+
+# Expected Result
+
+After successful execution:
+
+```text
+Docker Images Created
+
+Images Pushed to ECR
+
+Helm Charts Updated
+
+Pods Deployed to EKS
+```
+
+---
+
+# Verification
+
+Check Deployments:
+
+```bash
+kubectl get deploy
+```
+
+Check Pods:
+
+```bash
+kubectl get pods
+```
+
+Check Services:
+
+```bash
+kubectl get svc
+```
+
+At this point Jenkins CI/CD is fully operational.
