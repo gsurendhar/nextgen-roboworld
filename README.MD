@@ -636,3 +636,931 @@ Terraform modules must be deployed in the following order:
 80-eks
 ```
 
+
+
+# Part 2 — Terraform Infrastructure Deployment Guide
+
+---
+
+# Overview
+
+The Terraform repository provisions the complete AWS infrastructure required for the RoboWorld platform.
+
+The infrastructure is deployed in layers.
+
+Each layer writes outputs to AWS Systems Manager Parameter Store (SSM), and subsequent layers consume those values.
+
+This architecture removes direct dependencies between Terraform states.
+
+---
+
+# Infrastructure Deployment Order
+
+```text
+00-vpc
+
+10-sg
+
+20-bastion
+
+30-ecr
+
+40-iam
+
+60-acm
+
+70-ingress-alb
+
+80-eks
+```
+
+⚠️ Never change this order.
+
+---
+
+# Infrastructure Architecture
+
+```text
+Internet
+    │
+    ▼
+
+Route53
+    │
+    ▼
+
+ACM Certificate
+    │
+    ▼
+
+Application Load Balancer
+    │
+    ▼
+
+Amazon EKS
+
+────────────────────────
+
+Amazon ECR
+
+────────────────────────
+
+Bastion Host
+
+────────────────────────
+
+AWS SSM Parameter Store
+```
+
+---
+
+# Why SSM Parameter Store?
+
+Instead of Terraform Remote State outputs:
+
+```text
+Module A
+   │
+   ▼
+Parameter Store
+   │
+   ▼
+Module B
+```
+
+Example:
+
+```text
+VPC Module
+    │
+    ▼
+Stores vpc_id
+
+SSM Parameter Store
+
+    │
+    ▼
+
+Security Group Module
+```
+
+---
+
+# Network Configuration
+
+## VPC CIDR
+
+```text
+10.0.0.0/16
+```
+
+---
+
+## Public Subnets
+
+```text
+10.0.1.0/24
+
+10.0.2.0/24
+```
+
+Used For:
+
+* ALB
+* Bastion Host
+
+---
+
+## Private Subnets
+
+```text
+10.0.11.0/24
+
+10.0.12.0/24
+```
+
+Used For:
+
+* EKS Worker Nodes
+
+---
+
+## Database Subnets
+
+```text
+10.0.21.0/24
+
+10.0.22.0/24
+```
+
+Reserved for databases.
+
+---
+
+# Step 1 — Create VPC
+
+Navigate:
+
+```bash
+cd terraform/00-vpc
+```
+
+Initialize:
+
+```bash
+terraform init
+```
+
+Validate:
+
+```bash
+terraform validate
+```
+
+Plan:
+
+```bash
+terraform plan
+```
+
+Deploy:
+
+```bash
+terraform apply
+```
+
+Type:
+
+```text
+yes
+```
+
+---
+
+## Resources Created
+
+* VPC
+* Public Subnets
+* Private Subnets
+* Database Subnets
+* Route Tables
+* Internet Gateway
+
+---
+
+## Parameters Created
+
+```text
+/roboshop/dev/vpc_id
+
+/roboshop/dev/public_subnet_ids
+
+/roboshop/dev/private_subnet_ids
+
+/roboshop/dev/database_subnet_ids
+```
+
+---
+
+## Verification
+
+```bash
+aws ec2 describe-vpcs
+```
+
+Expected:
+
+```text
+1 VPC Created
+```
+
+---
+
+# Step 2 — Create Security Groups
+
+Navigate:
+
+```bash
+cd ../10-sg
+```
+
+Deploy:
+
+```bash
+terraform init
+
+terraform plan
+
+terraform apply
+```
+
+---
+
+## Resources Created
+
+### Bastion SG
+
+Used By:
+
+```text
+Bastion Host
+```
+
+---
+
+### VPN SG
+
+Used By:
+
+```text
+VPN Access
+```
+
+---
+
+### ALB SG
+
+Used By:
+
+```text
+Application Load Balancer
+```
+
+---
+
+### EKS Control Plane SG
+
+Used By:
+
+```text
+Amazon EKS Control Plane
+```
+
+---
+
+### EKS Node SG
+
+Used By:
+
+```text
+Worker Nodes
+```
+
+---
+
+## Parameters Created
+
+```text
+/roboshop/dev/bastion_sg_id
+
+/roboshop/dev/vpn_sg_id
+
+/roboshop/dev/ingress_alb_sg_id
+
+/roboshop/dev/eks_control_plane_sg_id
+
+/roboshop/dev/eks_node_sg_id
+```
+
+---
+
+## Verification
+
+```bash
+aws ec2 describe-security-groups
+```
+
+---
+
+# Step 3 — Create Bastion Host
+
+Navigate:
+
+```bash
+cd ../20-bastion
+```
+
+Deploy:
+
+```bash
+terraform init
+
+terraform plan
+
+terraform apply
+```
+
+---
+
+## Configuration
+
+```text
+OS:
+RHEL 9 DevOps
+
+Instance Type:
+t3.micro
+
+Storage:
+50 GB GP3
+```
+
+---
+
+## Purpose
+
+The Bastion Host is used for:
+
+* kubectl access
+* cluster troubleshooting
+* Terraform administration
+
+---
+
+## Verification
+
+```bash
+aws ec2 describe-instances
+```
+
+Expected:
+
+```text
+1 Running EC2 Instance
+```
+
+---
+
+# Step 4 — Create ECR Repositories
+
+Navigate:
+
+```bash
+cd ../30-ecr
+```
+
+Deploy:
+
+```bash
+terraform init
+
+terraform apply
+```
+
+---
+
+## Resources Created
+
+Amazon ECR repositories for:
+
+```text
+frontend
+
+catalogue
+
+user
+
+cart
+
+payment
+
+shipping
+```
+
+---
+
+## Features Enabled
+
+```text
+Scan On Push
+
+Mutable Tags
+
+Force Delete
+```
+
+---
+
+## Verification
+
+```bash
+aws ecr describe-repositories
+```
+
+Expected:
+
+```text
+6 Repositories
+```
+
+---
+
+# Step 5 — Create IAM Policies
+
+Navigate:
+
+```bash
+cd ../40-iam
+```
+
+Deploy:
+
+```bash
+terraform init
+
+terraform apply
+```
+
+---
+
+## Resources Created
+
+```text
+AWSLoadBalancerControllerIAMPolicy
+```
+
+Purpose:
+
+Used by:
+
+```text
+AWS Load Balancer Controller
+```
+
+---
+
+## Verification
+
+```bash
+aws iam list-policies
+```
+
+---
+
+# Step 6 — Create Route53 & ACM
+
+Navigate:
+
+```bash
+cd ../60-acm
+```
+
+Deploy:
+
+```bash
+terraform init
+
+terraform apply
+```
+
+---
+
+## Resources Created
+
+### Route53 Hosted Zone
+
+```text
+gonela.site
+```
+
+---
+
+### ACM Certificate
+
+```text
+*.gonela.site
+```
+
+---
+
+### DNS Validation Records
+
+Automatically created.
+
+---
+
+## Parameter Created
+
+```text
+/roboshop/dev/acm_certificate_arn
+```
+
+---
+
+## Verification
+
+```bash
+aws acm list-certificates
+```
+
+Expected:
+
+```text
+Status = ISSUED
+```
+
+---
+
+# Step 7 — Create Application Load Balancer
+
+Navigate:
+
+```bash
+cd ../70-ingress-alb
+```
+
+Deploy:
+
+```bash
+terraform init
+
+terraform apply
+```
+
+---
+
+## Resources Created
+
+* Internet Facing ALB
+* HTTPS Listener
+* Target Groups
+* Route53 Records
+
+---
+
+## Configuration
+
+```text
+Port:
+443
+
+SSL Policy:
+ELBSecurityPolicy-2016-08
+```
+
+---
+
+## DNS
+
+```text
+*.gonela.site
+```
+
+---
+
+## Parameter Created
+
+```text
+/roboshop/dev/ingress_alb_listener_arn
+```
+
+---
+
+## Verification
+
+```bash
+aws elbv2 describe-load-balancers
+```
+
+Expected:
+
+```text
+1 Active ALB
+```
+
+---
+
+# Step 8 — Create EKS Cluster
+
+Navigate:
+
+```bash
+cd ../80-eks
+```
+
+Deploy:
+
+```bash
+terraform init
+
+terraform apply
+```
+
+Deployment may take:
+
+```text
+15 - 25 Minutes
+```
+
+---
+
+# EKS Configuration
+
+## Cluster Version
+
+```text
+1.32
+```
+
+---
+
+## Endpoint
+
+```text
+Private Only
+```
+
+---
+
+## Node Group
+
+```text
+blue
+```
+
+---
+
+## Capacity Type
+
+```text
+SPOT
+```
+
+---
+
+## Node Scaling
+
+```text
+Minimum:
+2
+
+Desired:
+2
+
+Maximum:
+5
+```
+
+---
+
+## Instance Types
+
+```text
+m5.large
+
+c3.large
+
+c4.large
+
+c5.large
+```
+
+---
+
+## Addons Installed
+
+```text
+CoreDNS
+
+Kube Proxy
+
+VPC CNI
+
+Metrics Server
+
+Pod Identity Agent
+```
+
+---
+
+## Verification
+
+```bash
+aws eks list-clusters
+```
+
+Expected:
+
+```text
+roboshop-dev
+```
+
+---
+
+# Configure kubectl
+
+After EKS deployment:
+
+```bash
+aws eks update-kubeconfig \
+--region ap-south-1 \
+--name roboshop-dev
+```
+
+Verify:
+
+```bash
+kubectl get nodes
+```
+
+Expected:
+
+```text
+2 Ready Nodes
+```
+
+---
+
+# Infrastructure Verification Checklist
+
+Verify VPC:
+
+```bash
+aws ec2 describe-vpcs
+```
+
+---
+
+Verify Security Groups:
+
+```bash
+aws ec2 describe-security-groups
+```
+
+---
+
+Verify Bastion:
+
+```bash
+aws ec2 describe-instances
+```
+
+---
+
+Verify ECR:
+
+```bash
+aws ecr describe-repositories
+```
+
+---
+
+Verify ACM:
+
+```bash
+aws acm list-certificates
+```
+
+---
+
+Verify ALB:
+
+```bash
+aws elbv2 describe-load-balancers
+```
+
+---
+
+Verify EKS:
+
+```bash
+kubectl get nodes
+```
+
+Expected:
+
+```text
+2 Nodes Ready
+```
+
+---
+
+# Common Issues
+
+## Terraform Init Failure
+
+Run:
+
+```bash
+terraform init -reconfigure
+```
+
+---
+
+## AWS Authentication Error
+
+Verify:
+
+```bash
+aws sts get-caller-identity
+```
+
+---
+
+## ACM Not Issued
+
+Check:
+
+```text
+Route53 Validation Records
+```
+
+---
+
+## ALB Not Created
+
+Verify:
+
+```text
+Security Groups
+
+Subnets
+
+ACM ARN
+```
+
+---
+
+## EKS Node Not Joining
+
+Check:
+
+```bash
+kubectl get nodes
+```
+
+Review:
+
+```text
+Node Group
+
+Security Groups
+
+IAM Roles
+```
+
+---
+
+# Infrastructure Successfully Deployed
+
+At this stage you have:
+
+✅ VPC
+
+✅ Security Groups
+
+✅ Bastion Host
+
+✅ ECR
+
+✅ IAM
+
+✅ Route53
+
+✅ ACM
+
+✅ ALB
+
+✅ Amazon EKS
+
+
