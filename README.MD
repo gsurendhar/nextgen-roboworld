@@ -2645,3 +2645,1027 @@ kubectl get svc
 ```
 
 At this point Jenkins CI/CD is fully operational.
+
+
+
+## Helm Deployment Architecture, Application Flow, Service Dependencies & Verification
+
+# 4. Application Deployment & Helm Architecture
+
+---
+
+# Overview
+
+At this stage:
+
+✅ AWS Infrastructure is deployed
+
+✅ Amazon EKS is running
+
+✅ Jenkins is configured
+
+✅ Shared Library is configured
+
+✅ CI/CD pipelines are created
+
+The final step is understanding how applications are deployed into Kubernetes using Helm.
+
+Important:
+
+The RoboWorld platform does **NOT** use a single umbrella Helm chart.
+
+Each application component has its own Helm chart and is deployed independently through Jenkins pipelines.
+
+---
+
+# Helm Architecture
+
+```text id="v31x9h"
+Jenkins Pipeline
+
+        │
+
+        ▼
+
+Docker Build
+
+        │
+
+        ▼
+
+Amazon ECR
+
+        │
+
+        ▼
+
+Helm Chart
+
+        │
+
+        ▼
+
+helm upgrade
+
+        │
+
+        ▼
+
+Amazon EKS
+```
+
+---
+
+# Helm Repository Structure
+
+```text id="6tzdqk"
+helm/
+
+├── namespace.yaml
+
+├── storageClass.yaml
+
+├── sc.yaml
+
+│
+├── mongodb/
+
+├── mysql/
+
+├── redis/
+
+├── rabbitmq/
+
+│
+├── catalogue/
+
+├── user/
+
+├── cart/
+
+├── shipping/
+
+├── payment/
+
+└── frontend/
+```
+
+---
+
+# Why Individual Helm Charts?
+
+Benefits:
+
+```text id="pl9w1z"
+Independent Deployments
+
+Independent Rollbacks
+
+Microservice Isolation
+
+Independent Scaling
+
+Independent Versioning
+```
+
+Example:
+
+```text id="mzg9yy"
+Deploy Catalogue
+
+without
+
+Deploying User
+```
+
+---
+
+# Kubernetes Application Architecture
+
+```text id="ngtcl4"
+Internet
+    │
+    ▼
+
+AWS ALB
+    │
+    ▼
+
+Frontend
+    │
+
+ ┌───┼────────────┬────────────┬──────────┐
+
+ ▼   ▼            ▼            ▼          ▼
+
+Catalogue       User         Cart     Shipping
+
+ │               │            │          │
+
+ ▼               ▼            ▼          ▼
+
+MongoDB       MongoDB       Redis      MySQL
+
+                     │
+
+                     ▼
+
+                  Payment
+
+                     │
+
+                     ▼
+
+                 RabbitMQ
+```
+
+---
+
+# Application Dependency Flow
+
+```text id="q42mli"
+Frontend
+
+ │
+
+ ├── Catalogue
+
+ │      │
+
+ │      ▼
+
+ │   MongoDB
+
+ │
+
+ ├── User
+
+ │      │
+
+ │      ▼
+
+ │   MongoDB
+
+ │
+
+ ├── Cart
+
+ │      │
+
+ │      ▼
+
+ │    Redis
+
+ │
+
+ ├── Shipping
+
+ │      │
+
+ │      ▼
+
+ │    MySQL
+
+ │
+
+ └── Payment
+
+        │
+
+        ▼
+
+     RabbitMQ
+```
+
+---
+
+# Deployment Order
+
+The deployment order is extremely important.
+
+```text id="7cbkru"
+MongoDB
+
+↓
+
+MySQL
+
+↓
+
+Redis
+
+↓
+
+RabbitMQ
+
+↓
+
+Catalogue
+
+↓
+
+User
+
+↓
+
+Cart
+
+↓
+
+Shipping
+
+↓
+
+Payment
+
+↓
+
+Frontend
+```
+
+Reason:
+
+Applications depend on databases and messaging systems.
+
+---
+
+# Database Layer
+
+The platform contains four stateful services.
+
+---
+
+# MongoDB
+
+Purpose:
+
+```text id="4aq7mj"
+Catalogue Database
+
+User Database
+```
+
+Stores:
+
+```text id="n97e7z"
+Products
+
+Users
+
+Catalog Information
+```
+
+Type:
+
+```text id="x0k1x3"
+StatefulSet
+```
+
+---
+
+# MySQL
+
+Purpose:
+
+```text id="d8e8y0"
+Shipping Service Database
+```
+
+Stores:
+
+```text id="ehw57n"
+Shipping Data
+
+Orders
+
+Transactions
+```
+
+Type:
+
+```text id="0fgw0f"
+StatefulSet
+```
+
+---
+
+# Redis
+
+Purpose:
+
+```text id="2j3jwe"
+Cart Cache
+```
+
+Stores:
+
+```text id="2xbz8v"
+Session Data
+
+Cart Information
+```
+
+Type:
+
+```text id="xtzxzw"
+StatefulSet
+```
+
+---
+
+# RabbitMQ
+
+Purpose:
+
+```text id="n9pah5"
+Message Broker
+```
+
+Used By:
+
+```text id="edmnhs"
+Payment Service
+```
+
+Type:
+
+```text id="g1qvhs"
+StatefulSet
+```
+
+---
+
+# Backend Services
+
+---
+
+# Catalogue Service
+
+Technology:
+
+```text id="3jv6es"
+NodeJS
+```
+
+Purpose:
+
+```text id="owax2n"
+Product Catalogue
+```
+
+Dependencies:
+
+```text id="8m53u7"
+MongoDB
+```
+
+Pipeline:
+
+```text id="nznsy6"
+nodejsEKSPipeline()
+```
+
+---
+
+# User Service
+
+Technology:
+
+```text id="rz8spz"
+NodeJS
+```
+
+Purpose:
+
+```text id="jrx6k4"
+User Management
+```
+
+Dependencies:
+
+```text id="4t2nko"
+MongoDB
+```
+
+Pipeline:
+
+```text id="rq2hwu"
+nodejsEKSPipeline()
+```
+
+---
+
+# Cart Service
+
+Technology:
+
+```text id="jkncfu"
+NodeJS
+```
+
+Purpose:
+
+```text id="zxtx3y"
+Shopping Cart
+```
+
+Dependencies:
+
+```text id="hcz5ul"
+Redis
+```
+
+Pipeline:
+
+```text id="bnp1ol"
+nodejsEKSPipeline()
+```
+
+---
+
+# Shipping Service
+
+Technology:
+
+```text id="p8t2mb"
+Java
+```
+
+Purpose:
+
+```text id="4ffyxy"
+Order Shipping
+```
+
+Dependencies:
+
+```text id="s8hdui"
+MySQL
+```
+
+Pipeline:
+
+```text id="s9g38o"
+javaEKSPipeline()
+```
+
+---
+
+# Payment Service
+
+Technology:
+
+```text id="2s6rr9"
+Python
+```
+
+Purpose:
+
+```text id="t0bg42"
+Payment Processing
+```
+
+Dependencies:
+
+```text id="qpm4m3"
+RabbitMQ
+```
+
+Pipeline:
+
+```text id="69gr4w"
+pythonEKSPipeline()
+```
+
+---
+
+# Frontend Service
+
+Technology:
+
+```text id="9fyhvv"
+Nginx
+```
+
+Purpose:
+
+```text id="o7e1sd"
+User Interface
+```
+
+Dependencies:
+
+```text id="z37m6r"
+All Backend Services
+```
+
+Pipeline:
+
+```text id="ghp2v6"
+nodejsEKSPipeline()
+```
+
+---
+
+# Kubernetes Resources Created
+
+Each Helm chart typically creates:
+
+```text id="mqap0t"
+Deployment
+
+Service
+
+ConfigMap
+
+Horizontal Pod Autoscaler
+
+Ingress (if applicable)
+```
+
+---
+
+# Horizontal Pod Autoscaling
+
+Application services support autoscaling.
+
+Example:
+
+```yaml id="m7g4ly"
+minReplicas: 1
+
+maxReplicas: 5
+
+targetCPUUtilizationPercentage: 80
+```
+
+Meaning:
+
+```text id="tn17cl"
+Scale Up
+
+when CPU > 80%
+```
+
+---
+
+# Service Discovery
+
+Applications communicate internally using Kubernetes Services.
+
+Example:
+
+```text id="2tz12w"
+catalogue
+
+user
+
+cart
+
+payment
+
+shipping
+```
+
+Applications use service names rather than IP addresses.
+
+Example:
+
+```text id="kvj6sr"
+http://catalogue
+
+http://user
+
+http://cart
+```
+
+---
+
+# Jenkins Deployment Flow
+
+For every GitHub commit:
+
+```text id="bq35s9"
+Developer Commit
+
+        │
+
+        ▼
+
+GitHub
+
+        │
+
+        ▼
+
+Webhook
+
+        │
+
+        ▼
+
+Jenkins
+
+        │
+
+        ▼
+
+Build
+
+        │
+
+        ▼
+
+Docker Image
+
+        │
+
+        ▼
+
+Amazon ECR
+
+        │
+
+        ▼
+
+Helm Upgrade
+
+        │
+
+        ▼
+
+Amazon EKS
+```
+
+---
+
+# Rolling Deployment
+
+When Jenkins deploys:
+
+```text id="4h8ckk"
+Old Pod
+
+     │
+
+     ▼
+
+New Pod
+```
+
+Kubernetes performs rolling updates.
+
+Benefits:
+
+```text id="uvmqlz"
+Zero Downtime
+
+Automatic Rollback
+
+Health Validation
+```
+
+---
+
+# Application Verification
+
+After all pipelines succeed:
+
+Verify nodes:
+
+```bash id="m5o3xw"
+kubectl get nodes
+```
+
+Expected:
+
+```text id="39wgzd"
+Ready
+```
+
+---
+
+# Verify Pods
+
+```bash id="z8dlr6"
+kubectl get pods
+```
+
+Expected:
+
+```text id="wmtzdo"
+frontend
+
+catalogue
+
+user
+
+cart
+
+payment
+
+shipping
+
+mongodb
+
+mysql
+
+redis
+
+rabbitmq
+```
+
+Status:
+
+```text id="5dd22v"
+Running
+```
+
+---
+
+# Verify Deployments
+
+```bash id="rtfq5r"
+kubectl get deploy
+```
+
+Expected:
+
+```text id="s7kn17"
+frontend
+
+catalogue
+
+user
+
+cart
+
+payment
+
+shipping
+```
+
+---
+
+# Verify Services
+
+```bash id="d4mr6j"
+kubectl get svc
+```
+
+Expected:
+
+```text id="zjqfln"
+frontend
+
+catalogue
+
+user
+
+cart
+
+payment
+
+shipping
+
+mongodb
+
+mysql
+
+redis
+
+rabbitmq
+```
+
+---
+
+# Verify Ingress
+
+```bash id="35rkz3"
+kubectl get ingress
+```
+
+Expected:
+
+```text id="5tjqgs"
+ALB Ingress
+```
+
+---
+
+# Verify ALB
+
+```bash id="j77ecv"
+aws elbv2 describe-load-balancers
+```
+
+Expected:
+
+```text id="99fq4e"
+State = active
+```
+
+---
+
+# Verify DNS
+
+Check:
+
+```text id="g34b1y"
+https://dev.gonela.site
+```
+
+Expected:
+
+```text id="9w05c4"
+Frontend Page Loads
+```
+
+---
+
+# End-to-End Application Flow
+
+```text id="jjm6go"
+User
+
+ │
+
+ ▼
+
+Route53
+
+ │
+
+ ▼
+
+AWS ALB
+
+ │
+
+ ▼
+
+Frontend
+
+ │
+
+ ├── Catalogue
+
+ │      │
+
+ │      ▼
+
+ │   MongoDB
+
+ │
+
+ ├── User
+
+ │      │
+
+ │      ▼
+
+ │   MongoDB
+
+ │
+
+ ├── Cart
+
+ │      │
+
+ │      ▼
+
+ │   Redis
+
+ │
+
+ ├── Shipping
+
+ │      │
+
+ │      ▼
+
+ │   MySQL
+
+ │
+
+ └── Payment
+
+        │
+
+        ▼
+
+     RabbitMQ
+```
+
+---
+
+# Deployment Success Criteria
+
+Infrastructure:
+
+```text id="fjlwm4"
+VPC
+
+ALB
+
+EKS
+
+ECR
+
+ACM
+
+Route53
+```
+
+Status:
+
+```text id="yhmfwj"
+Healthy
+```
+
+---
+
+Applications:
+
+```text id="6i3wnm"
+Frontend
+
+Catalogue
+
+User
+
+Cart
+
+Shipping
+
+Payment
+```
+
+Status:
+
+```text id="7r9kfw"
+Running
+```
+
+---
+
+Databases:
+
+```text id="67hjlwm"
+MongoDB
+
+MySQL
+
+Redis
+
+RabbitMQ
+```
+
+Status:
+
+```text id="8czm8s"
+Running
+```
+
+At this point the RoboWorld platform is fully deployed and operational.
+
