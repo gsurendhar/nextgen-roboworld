@@ -1,5 +1,5 @@
 
-# 🚀 NextGen RoboWorld Platform
+#  NextGen RoboWorld Platform
 
 ## Complete End-to-End Setup Guide
 
