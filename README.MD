@@ -3669,3 +3669,1008 @@ Running
 
 At this point the RoboWorld platform is fully deployed and operational.
 
+
+## Troubleshooting, Monitoring, Rollbacks, Disaster Recovery, Cleanup & Production Operations Runbook
+
+# 5. Operations Runbook
+
+---
+
+# Overview
+
+This section explains how to operate, troubleshoot, recover, upgrade, and safely destroy the RoboWorld platform.
+
+This is the section most commonly used by:
+
+* DevOps Engineers
+* Platform Engineers
+* SRE Teams
+* Production Support Teams
+
+---
+
+# Production Operations Architecture
+
+```text id="opsarch1"
+                    Production Platform
+
+                           │
+
+                           ▼
+
+                    Amazon EKS
+
+                           │
+
+        ┌──────────────────┼──────────────────┐
+
+        ▼                  ▼                  ▼
+
+    Applications      Databases          CI/CD
+
+        │                  │                │
+
+        ▼                  ▼                ▼
+
+    Monitoring         Backups          Jenkins
+
+        │
+
+        ▼
+
+    Alerting
+```
+
+---
+
+# Daily Health Checks
+
+Perform these checks daily.
+
+---
+
+# Check EKS Cluster
+
+```bash id="hc1"
+kubectl get nodes
+```
+
+Expected:
+
+```text id="hc2"
+STATUS = Ready
+```
+
+If not:
+
+```bash id="hc3"
+kubectl describe node NODE_NAME
+```
+
+---
+
+# Check Pods
+
+```bash id="hc4"
+kubectl get pods -A
+```
+
+Expected:
+
+```text id="hc5"
+Running
+```
+
+Investigate:
+
+```text id="hc6"
+Pending
+
+CrashLoopBackOff
+
+ImagePullBackOff
+
+Error
+```
+
+---
+
+# Check Deployments
+
+```bash id="hc7"
+kubectl get deploy
+```
+
+Expected:
+
+```text id="hc8"
+AVAILABLE = Desired
+```
+
+---
+
+# Check Services
+
+```bash id="hc9"
+kubectl get svc
+```
+
+Verify:
+
+```text id="hc10"
+ClusterIP
+
+NodePort
+
+LoadBalancer
+```
+
+are healthy.
+
+---
+
+# Check Ingress
+
+```bash id="hc11"
+kubectl get ingress
+```
+
+Verify:
+
+```text id="hc12"
+ADDRESS
+```
+
+contains ALB hostname.
+
+---
+
+# Check ALB
+
+```bash id="hc13"
+aws elbv2 describe-load-balancers
+```
+
+Expected:
+
+```text id="hc14"
+State = active
+```
+
+---
+
+# Check ACM Certificate
+
+```bash id="hc15"
+aws acm list-certificates
+```
+
+Verify:
+
+```text id="hc16"
+ISSUED
+```
+
+---
+
+# Check Route53
+
+Verify:
+
+```text id="hc17"
+https://dev.gonela.site
+```
+
+Loads successfully.
+
+---
+
+# Common Kubernetes Issues
+
+---
+
+# Pod Pending
+
+Symptoms:
+
+```text id="p1"
+Pod never starts
+```
+
+Check:
+
+```bash id="p2"
+kubectl describe pod POD_NAME
+```
+
+Common causes:
+
+```text id="p3"
+No Worker Capacity
+
+Storage Not Bound
+
+Resource Limits
+```
+
+---
+
+# CrashLoopBackOff
+
+Symptoms:
+
+```text id="c1"
+Container repeatedly restarting
+```
+
+Check logs:
+
+```bash id="c2"
+kubectl logs POD_NAME
+```
+
+Common causes:
+
+```text id="c3"
+Application Errors
+
+Missing Environment Variables
+
+Database Connection Failure
+```
+
+---
+
+# ImagePullBackOff
+
+Symptoms:
+
+```text id="i1"
+Image cannot be downloaded
+```
+
+Check:
+
+```bash id="i2"
+kubectl describe pod POD_NAME
+```
+
+Common causes:
+
+```text id="i3"
+Wrong Tag
+
+ECR Permission Issue
+
+Repository Missing
+```
+
+---
+
+# Service Connectivity Issues
+
+Test service:
+
+```bash id="s1"
+kubectl get svc
+```
+
+Check endpoints:
+
+```bash id="s2"
+kubectl get endpoints
+```
+
+Verify:
+
+```text id="s3"
+Endpoints Exist
+```
+
+---
+
+# Database Connectivity Issues
+
+---
+
+# MongoDB
+
+Verify:
+
+```bash id="m1"
+kubectl get pods | grep mongo
+```
+
+Check logs:
+
+```bash id="m2"
+kubectl logs mongodb-0
+```
+
+---
+
+# MySQL
+
+Verify:
+
+```bash id="my1"
+kubectl get pods | grep mysql
+```
+
+Check logs:
+
+```bash id="my2"
+kubectl logs mysql-0
+```
+
+---
+
+# Redis
+
+Verify:
+
+```bash id="r1"
+kubectl get pods | grep redis
+```
+
+---
+
+# RabbitMQ
+
+Verify:
+
+```bash id="rb1"
+kubectl get pods | grep rabbitmq
+```
+
+---
+
+# Jenkins Troubleshooting
+
+---
+
+# Jenkins Not Starting
+
+Check:
+
+```bash id="j1"
+sudo systemctl status jenkins
+```
+
+View logs:
+
+```bash id="j2"
+sudo journalctl -u jenkins
+```
+
+---
+
+# Docker Permission Errors
+
+Verify:
+
+```bash id="j3"
+groups jenkins
+```
+
+Expected:
+
+```text id="j4"
+docker
+```
+
+If missing:
+
+```bash id="j5"
+sudo usermod -aG docker jenkins
+```
+
+Restart:
+
+```bash id="j6"
+sudo systemctl restart jenkins
+```
+
+---
+
+# Pipeline Failures
+
+Check:
+
+```text id="j7"
+Pipeline Console Output
+```
+
+Review:
+
+```text id="j8"
+Build Stage
+
+Docker Stage
+
+ECR Stage
+
+Helm Stage
+```
+
+---
+
+# ECR Issues
+
+Login test:
+
+```bash id="e1"
+aws ecr get-login-password
+```
+
+Verify:
+
+```bash id="e2"
+aws ecr describe-repositories
+```
+
+Check image:
+
+```bash id="e3"
+aws ecr list-images \
+--repository-name catalogue
+```
+
+---
+
+# Helm Troubleshooting
+
+View releases:
+
+```bash id="h1"
+helm list -A
+```
+
+Inspect release:
+
+```bash id="h2"
+helm status frontend
+```
+
+View values:
+
+```bash id="h3"
+helm get values frontend
+```
+
+---
+
+# Deployment Rollback
+
+Sometimes deployments fail.
+
+Helm supports rollback.
+
+---
+
+# View Revision History
+
+```bash id="rb2"
+helm history frontend
+```
+
+Example:
+
+```text id="rb3"
+Revision 1
+
+Revision 2
+
+Revision 3
+```
+
+---
+
+# Rollback
+
+```bash id="rb4"
+helm rollback frontend 2
+```
+
+Result:
+
+```text id="rb5"
+Revision 2 Restored
+```
+
+---
+
+# Kubernetes Rollback
+
+View rollout:
+
+```bash id="k1"
+kubectl rollout history deployment/frontend
+```
+
+Rollback:
+
+```bash id="k2"
+kubectl rollout undo deployment/frontend
+```
+
+---
+
+# Application Upgrade Process
+
+Developer:
+
+```text id="u1"
+Git Commit
+```
+
+↓
+
+```text id="u2"
+Git Push
+```
+
+↓
+
+```text id="u3"
+Jenkins Trigger
+```
+
+↓
+
+```text id="u4"
+Docker Build
+```
+
+↓
+
+```text id="u5"
+Push To ECR
+```
+
+↓
+
+```text id="u6"
+Helm Upgrade
+```
+
+↓
+
+```text id="u7"
+Rolling Deployment
+```
+
+No manual intervention required.
+
+---
+
+# Backup Strategy
+
+Recommended production backups.
+
+---
+
+# EBS Volumes
+
+Create snapshots.
+
+```bash id="b1"
+aws ec2 create-snapshot \
+--volume-id vol-xxxx
+```
+
+---
+
+# EKS Configuration
+
+Backup:
+
+```text id="b2"
+Terraform Code
+
+Helm Charts
+
+GitHub Repositories
+```
+
+---
+
+# Database Backups
+
+MongoDB:
+
+```text id="b3"
+mongodump
+```
+
+MySQL:
+
+```text id="b4"
+mysqldump
+```
+
+---
+
+# Disaster Recovery Plan
+
+---
+
+# Scenario 1 — Pod Failure
+
+Action:
+
+```text id="dr1"
+Kubernetes Auto Recovery
+```
+
+No manual action required.
+
+---
+
+# Scenario 2 — Node Failure
+
+Action:
+
+```text id="dr2"
+EKS Creates Replacement Node
+```
+
+Pods automatically rescheduled.
+
+---
+
+# Scenario 3 — Service Failure
+
+Action:
+
+```bash id="dr3"
+kubectl rollout restart deployment SERVICE
+```
+
+---
+
+# Scenario 4 — Cluster Failure
+
+Recovery:
+
+```text id="dr4"
+Terraform Recreate Infrastructure
+
+Jenkins Redeploy Applications
+```
+
+---
+
+# Scenario 5 — Region Disaster
+
+Recovery:
+
+```text id="dr5"
+Restore Terraform
+
+Restore DNS
+
+Restore Databases
+
+Redeploy Applications
+```
+
+---
+
+# Monitoring Recommendations
+
+Install:
+
+```text id="mon1"
+Prometheus
+
+Grafana
+
+AlertManager
+```
+
+---
+
+# Logging Recommendations
+
+Install:
+
+```text id="log1"
+FluentBit
+
+OpenSearch
+
+ELK Stack
+```
+
+or
+
+```text id="log2"
+CloudWatch Logs
+```
+
+---
+
+# Security Recommendations
+
+---
+
+# IAM
+
+Use:
+
+```text id="sec1"
+Least Privilege
+```
+
+Avoid:
+
+```text id="sec2"
+AdministratorAccess
+```
+
+for applications.
+
+---
+
+# EKS
+
+Enable:
+
+```text id="sec3"
+IRSA
+
+Pod Identity
+
+Secrets Encryption
+```
+
+---
+
+# Images
+
+Enable:
+
+```text id="sec4"
+Image Scanning
+```
+
+already configured in ECR.
+
+---
+
+# TLS
+
+Use:
+
+```text id="sec5"
+ACM Certificates
+```
+
+for all endpoints.
+
+---
+
+# Production Hardening Checklist
+
+```text id="hard1"
+☑ VPC Created
+
+☑ Private Subnets Used
+
+☑ EKS Running
+
+☑ ECR Running
+
+☑ Route53 Configured
+
+☑ ACM Certificate Issued
+
+☑ ALB Active
+
+☑ Jenkins Configured
+
+☑ Shared Library Configured
+
+☑ Pipelines Created
+
+☑ Docker Builds Automated
+
+☑ ECR Push Automated
+
+☑ Helm Deployments Automated
+
+☑ Application Running
+
+☑ HTTPS Enabled
+```
+
+Recommended additions:
+
+```text id="hard2"
+☐ Prometheus
+
+☐ Grafana
+
+☐ AlertManager
+
+☐ CloudWatch Monitoring
+
+☐ Secrets Manager
+
+☐ Velero Backup
+
+☐ WAF
+
+☐ GuardDuty
+
+☐ Security Hub
+```
+
+---
+
+# Infrastructure Destroy Procedure
+
+Destroy in reverse order.
+
+```text id="d1"
+80-eks
+
+70-ingress-alb
+
+60-acm
+
+40-iam
+
+30-ecr
+
+20-bastion
+
+10-sg
+
+00-vpc
+```
+
+Example:
+
+```bash id="d2"
+terraform destroy
+```
+
+Always destroy from highest layer to lowest layer.
+
+---
+
+# Final End-to-End Platform Architecture
+
+```text id="finalarch"
+Developer
+
+    │
+
+    ▼
+
+GitHub
+
+    │
+
+    ▼
+
+Jenkins
+
+    │
+
+    ▼
+
+Shared Library
+
+    │
+
+    ▼
+
+Docker Build
+
+    │
+
+    ▼
+
+Amazon ECR
+
+    │
+
+    ▼
+
+Helm Deployment
+
+    │
+
+    ▼
+
+Amazon EKS
+
+    │
+
+    ├── Frontend
+
+    ├── Catalogue
+
+    ├── User
+
+    ├── Cart
+
+    ├── Shipping
+
+    └── Payment
+
+    │
+
+    ▼
+
+MongoDB
+
+MySQL
+
+Redis
+
+RabbitMQ
+
+    │
+
+    ▼
+
+AWS ALB
+
+    │
+
+    ▼
+
+Route53
+
+    │
+
+    ▼
+
+Users
+```
+
+---
+
+# Conclusion
+
+By following this handbook in sequence you will:
+
+1. Provision AWS Infrastructure using Terraform
+2. Configure Amazon EKS
+3. Install and configure Jenkins
+4. Configure Shared Libraries
+5. Create CI/CD pipelines
+6. Build Docker images automatically
+7. Push images to Amazon ECR
+8. Deploy applications using Helm
+9. Run workloads on Amazon EKS
+10. Expose applications through ALB and Route53
+11. Operate, monitor, troubleshoot, and recover the platform
+
+The RoboWorld platform is now fully automated from Infrastructure Provisioning → Application Deployment → Production Operations.
+
+
+
+You now have a full handbook covering:
+
+* Architecture diagrams
+* Terraform infrastructure setup
+* EKS configuration
+* SSM Parameter Store design
+* Jenkins installation/configuration
+* Shared Library pipelines
+* Docker & ECR workflow
+* Helm deployment architecture (individual charts)
+* Microservice dependencies
+* Verification procedures
+* Troubleshooting
+* Rollbacks
+* Disaster recovery
+* Production hardening
+* Infrastructure teardown
+
+This structure is suitable for a GitHub project, onboarding guide, handover document, or DevOps portfolio project.
